@@ -1,0 +1,170 @@
+version: "3"
+
+services:
+  # MongoDB databases for each service
+  user-db:
+    image: mongo:latest
+    volumes:
+      - user-db-data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - healthcare-network
+
+  doctor-db:
+    image: mongo:latest
+    volumes:
+      - doctor-db-data:/data/db
+    ports:
+      - "27018:27017"
+    networks:
+      - healthcare-network
+
+  appointment-db:
+    image: mongo:latest
+    volumes:
+      - appointment-db-data:/data/db
+    ports:
+      - "27019:27017"
+    networks:
+      - healthcare-network
+
+  feedback-db:
+    image: mongo:latest
+    volumes:
+      - feedback-db-data:/data/db
+    ports:
+      - "27020:27017"
+    networks:
+      - healthcare-network
+
+  notification-db:
+    image: mongo:latest
+    volumes:
+      - notification-db-data:/data/db
+    ports:
+      - "27021:27017"
+    networks:
+      - healthcare-network
+
+  # Microservices
+  user-service:
+    build: ./backend/user-service
+    ports:
+      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
+    depends_on:
+      - user-db
+    environment:
+      - MONGODB_URI=${MONGODB_URI_USER}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=${USER_SERVICE_PORT}
+    env_file:
+      - .env
+    networks:
+      - healthcare-network
+
+  doctor-service:
+    build: ./backend/doctor-service
+    ports:
+      - "${DOCTOR_SERVICE_PORT}:${DOCTOR_SERVICE_PORT}"
+    depends_on:
+      - doctor-db
+    environment:
+      - MONGODB_URI=${MONGODB_URI_DOCTOR}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=${DOCTOR_SERVICE_PORT}
+    env_file:
+      - .env
+    networks:
+      - healthcare-network
+
+  appointment-service:
+    build: ./backend/appointment-service
+    ports:
+      - "${APPOINTMENT_SERVICE_PORT}:${APPOINTMENT_SERVICE_PORT}"
+    depends_on:
+      - appointment-db
+      - user-service
+      - doctor-service
+    environment:
+      - MONGODB_URI=${MONGODB_URI_APPOINTMENT}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT}
+      - DOCTOR_SERVICE_URL=http://doctor-service:${DOCTOR_SERVICE_PORT}
+      - NOTIFICATION_SERVICE_URL=http://notification-service:${NOTIFICATION_SERVICE_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=${APPOINTMENT_SERVICE_PORT}
+    env_file:
+      - .env
+    networks:
+      - healthcare-network
+
+  feedback-service:
+    build: ./backend/feedback-service
+    ports:
+      - "${FEEDBACK_SERVICE_PORT}:${FEEDBACK_SERVICE_PORT}"
+    depends_on:
+      - feedback-db
+      - appointment-service
+    environment:
+      - MONGODB_URI=${MONGODB_URI_FEEDBACK}
+      - APPOINTMENT_SERVICE_URL=http://appointment-service:${APPOINTMENT_SERVICE_PORT}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT}
+      - DOCTOR_SERVICE_URL=http://doctor-service:${DOCTOR_SERVICE_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=${FEEDBACK_SERVICE_PORT}
+    env_file:
+      - .env
+    networks:
+      - healthcare-network
+
+  notification-service:
+    build: ./backend/notification-service
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT}:${NOTIFICATION_SERVICE_PORT}"
+    depends_on:
+      - notification-db
+    environment:
+      - MONGODB_URI=${MONGODB_URI_NOTIFICATION}
+      - EMAIL_SERVICE=${EMAIL_SERVICE}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=${NOTIFICATION_SERVICE_PORT}
+    env_file:
+      - .env
+    networks:
+      - healthcare-network
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+    depends_on:
+      - user-service
+      - doctor-service
+      - appointment-service
+      - feedback-service
+      - notification-service
+    environment:
+      - REACT_APP_API_BASE_URL=${REACT_APP_API_BASE_URL}
+      - REACT_APP_USER_SERVICE_PORT=${REACT_APP_USER_SERVICE_PORT}
+      - REACT_APP_DOCTOR_SERVICE_PORT=${REACT_APP_DOCTOR_SERVICE_PORT}
+      - REACT_APP_APPOINTMENT_SERVICE_PORT=${REACT_APP_APPOINTMENT_SERVICE_PORT}
+      - REACT_APP_FEEDBACK_SERVICE_PORT=${REACT_APP_FEEDBACK_SERVICE_PORT}
+      - REACT_APP_NOTIFICATION_SERVICE_PORT=${REACT_APP_NOTIFICATION_SERVICE_PORT}
+    env_file:
+      - .env
+    networks:
+      - healthcare-network
+
+networks:
+  healthcare-network:
+    driver: bridge
+
+volumes:
+  user-db-data:
+  doctor-db-data:
+  appointment-db-data:
+  feedback-db-data:
+  notification-db-data:
