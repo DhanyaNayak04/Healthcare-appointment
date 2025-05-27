@@ -72,6 +72,13 @@ router.post(
         return res.status(400).json({ message: 'User already exists' });
       }
 
+      // Check if trying to register as admin with non-approved email
+      if (role === 'admin' && !User.isApprovedAdminEmail(email)) {
+        return res.status(403).json({ 
+          message: 'Unauthorized. This email is not approved for admin registration.' 
+        });
+      }
+
       // Create new user
       user = new User({
         email,

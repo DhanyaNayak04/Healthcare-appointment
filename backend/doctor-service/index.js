@@ -45,6 +45,27 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'UP', service: 'doctor-service' });
 });
 
+// Global error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err.stack);
+
+  // Default error response
+  const errorResponse = {
+    message: err.message || 'Something went wrong on the server',
+    error: process.env.NODE_ENV === 'development' ? err.stack : {},
+  };
+
+  // Set appropriate status code
+  const statusCode = err.statusCode || 500;
+
+  res.status(statusCode).json(errorResponse);
+});
+
+// Handle 404 errors
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
+
 // Connect to MongoDB
 mongoose
   .connect(MONGODB_URI, {

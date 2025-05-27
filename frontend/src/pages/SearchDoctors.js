@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
@@ -10,65 +10,56 @@ const SearchDoctors = () => {
   const [selectedSpecialization, setSelectedSpecialization] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   const { token } = useAuth();
   const api = useMemo(() => new ApiService(token), [token]);
   
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch specializations
-        const specializationsData = await api.getAllSpecializations();
-        setSpecializations(specializationsData);
-        
-        // Fetch doctors
-        const doctorsData = await api.getAllDoctors();
-        
-        // Fetch user details for each doctor
-        const doctorsWithUserDetails = await Promise.all(
-          doctorsData.map(async (doctor) => {
-            try {
-              const userResponse = await fetch(`http://localhost:3001/api/users/${doctor.userId}`);
-              const userData = await userResponse.json();
-              return {
-                ...doctor,
-                user: userData
-              };
-            } catch (error) {
-              console.error('Error fetching user details:', error);
-              return doctor;
-            }
-          })
-        );
-        
-        setDoctors(doctorsWithUserDetails);
-      } catch (error) {
-        toast.error('Failed to load doctors. Please try again.');
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchData();
-  }, [api]);
-  
-  const handleSpecializationChange = async (e) => {
-    const specializationId = e.target.value;
-    setSelectedSpecialization(specializationId);
-    
+  const fetchDoctors = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      const doctorsData = await api.getAllDoctors(specializationId || null);
+      // Fetch specializations
+      const specializationsData = await api.getAllSpecializations();
+      setSpecializations(specializationsData || []);
+      
+      // Fetch only approved doctors
+      const response = await api.getAllDoctors(selectedSpecialization || null, true);
+      
+      // Check if there was an error
+      if (response.error) {
+        setError(response.error);
+        toast.error(`Failed to load doctors: ${response.error}`);
+        setDoctors([]);
+        return;
+      }
+      
+      // Use the doctors array from the response
+      const doctorsData = response.doctors || [];
+      
+      if (doctorsData.length === 0) {
+        console.log('No doctors found or empty array returned');
+      }
       
       // Fetch user details for each doctor
       const doctorsWithUserDetails = await Promise.all(
         doctorsData.map(async (doctor) => {
           try {
-            const userResponse = await fetch(`http://localhost:3001/api/users/${doctor.userId}`);
+            if (!doctor || !doctor.userId) {
+              console.warn('Doctor object is invalid:', doctor);
+              return { ...doctor, user: { name: 'Unknown' } };
+            }
+            
+            const userResponse = await fetch(`http://localhost:3001/api/users/${doctor.userId}`, {
+              headers: { 'x-auth-token': token }
+            });
+            
+            if (!userResponse.ok) {
+              console.warn(`Failed to fetch user details for doctor ${doctor._id}`);
+              return { ...doctor, user: { name: 'Unknown' } };
+            }
+            
             const userData = await userResponse.json();
             return {
               ...doctor,
@@ -76,15 +67,81 @@ const SearchDoctors = () => {
             };
           } catch (error) {
             console.error('Error fetching user details:', error);
-            return doctor;
+            return { ...doctor, user: { name: 'Unknown' } };
           }
         })
       );
       
       setDoctors(doctorsWithUserDetails);
     } catch (error) {
+      setError('Failed to load doctors. Please try again.');
+      toast.error('Failed to load doctors. Please try again.');
+      console.error(error);
+      setDoctors([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [api, token, selectedSpecialization]);
+  
+  useEffect(() => {
+    fetchDoctors();
+  }, [fetchDoctors]);
+  
+  const handleSpecializationChange = async (e) => {
+    const specializationId = e.target.value;
+    setSelectedSpecialization(specializationId);
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await api.getAllDoctors(specializationId || null, true);
+      
+      // Check if there was an error
+      if (response.error) {
+        setError(response.error);
+        toast.error(`Failed to load doctors: ${response.error}`);
+        setDoctors([]);
+        return;
+      }
+      
+      // Use the doctors array from the response
+      const doctorsData = response.doctors || [];
+      
+      // Fetch user details for each doctor
+      const doctorsWithUserDetails = await Promise.all(
+        doctorsData.map(async (doctor) => {
+          try {
+            if (!doctor || !doctor.userId) {
+              return { ...doctor, user: { name: 'Unknown' } };
+            }
+            
+            const userResponse = await fetch(`http://localhost:3001/api/users/${doctor.userId}`, {
+              headers: { 'x-auth-token': token }
+            });
+            
+            if (!userResponse.ok) {
+              return { ...doctor, user: { name: 'Unknown' } };
+            }
+            
+            const userData = await userResponse.json();
+            return {
+              ...doctor,
+              user: userData
+            };
+          } catch (error) {
+            console.error('Error fetching user details:', error);
+            return { ...doctor, user: { name: 'Unknown' } };
+          }
+        })
+      );
+      
+      setDoctors(doctorsWithUserDetails);
+    } catch (error) {
+      setError('Failed to filter doctors. Please try again.');
       toast.error('Failed to filter doctors. Please try again.');
       console.error(error);
+      setDoctors([]);
     } finally {
       setLoading(false);
     }
@@ -95,6 +152,8 @@ const SearchDoctors = () => {
   };
   
   const filteredDoctors = doctors.filter((doctor) => {
+    if (!doctor || !doctor.user) return false;
+    
     return (
       doctor.user?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (doctor.bio && doctor.bio.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -146,6 +205,16 @@ const SearchDoctors = () => {
         <div className="text-center py-10">
           <div className="spinner"></div>
           <p className="mt-2 text-gray-600">Loading doctors...</p>
+        </div>
+      ) : error ? (
+        <div className="text-center py-10 bg-white rounded-lg shadow-md">
+          <p className="text-red-600">{error}</p>
+          <button 
+            onClick={fetchDoctors}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Try Again
+          </button>
         </div>
       ) : filteredDoctors.length === 0 ? (
         <div className="text-center py-10 bg-white rounded-lg shadow-md">

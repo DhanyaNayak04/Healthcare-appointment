@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import ApiService from '../../services/api';
 import { format } from 'date-fns';
 import { FaCalendarAlt, FaUserCheck, FaClock, FaUserMd, FaCalendarCheck, FaStar, FaUsers } from 'react-icons/fa';
 
 const DoctorDashboard = () => {
-  const { user, token } = useAuth();
+  const { user, token, loading: authLoading, debugAuth } = useAuth();
   const [doctorProfile, setDoctorProfile] = useState(null);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [stats, setStats] = useState({
@@ -16,19 +16,52 @@ const DoctorDashboard = () => {
     cancelledCount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
+  const navigate = useNavigate();
   const api = useMemo(() => new ApiService(token), [token]);
   
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    // Debug auth when component mounts
+    console.log('Current user in DoctorDashboard:', user);
+    if (debugAuth) debugAuth();
+    
+    // Only fetch data if auth is complete and user exists
+    if (!authLoading && token && user && user.id) {
+      fetchDashboardData();
+    } else if (!authLoading && (!token || !user)) {
+      navigate('/login');
+    }
+  }, [authLoading, token, user]);
+  
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Check if user exists and has an ID
+      if (!user || !user.id) {
+        console.error('User data incomplete. User:', user);
+        setError('User data not available. Please try logging in again.');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('Fetching doctor profile for user ID:', user.id);
+      
+      // Fetch doctor profile
       try {
-        setLoading(true);
-        
-        // Fetch doctor profile
         const doctorProfile = await api.getDoctorByUserId(user.id);
+        console.log('Doctor profile fetched:', doctorProfile);
         setDoctorProfile(doctorProfile);
-        
-        // Fetch upcoming appointments
+      } catch (profileError) {
+        console.error('Error fetching doctor profile:', profileError);
+        // Continue with other data even if profile fetch fails
+      }
+      
+      // Fetch upcoming appointments with error handling
+      try {
+        console.log('Fetching scheduled appointments');
         const appointments = await api.getAppointments('scheduled');
         
         // Sort and filter appointments
@@ -55,29 +88,90 @@ const DoctorDashboard = () => {
             appointment.status === 'scheduled'
         );
         
-        const completedAppointments = await api.getAppointments('completed');
-        const cancelledAppointments = await api.getAppointments('cancelled');
-        
-        setStats({
+        setStats(prevStats => ({
+          ...prevStats,
           todayCount: todayAppointments.length,
           upcomingCount: upcomingAppointments.length,
-          completedCount: completedAppointments.length,
-          cancelledCount: cancelledAppointments.length,
-        });
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-      } finally {
-        setLoading(false);
+        }));
+      } catch (appointmentError) {
+        console.error('Error fetching appointments:', appointmentError);
+        // Continue with other data even if appointments fetch fails
       }
-    };
-    
-    fetchDashboardData();
-  }, [api, user.id]);
+      
+      // Fetch completed and cancelled appointments stats
+      try {
+        const completedAppointments = await api.getAppointments('completed');
+        setStats(prevStats => ({
+          ...prevStats,
+          completedCount: completedAppointments.length,
+        }));
+      } catch (error) {
+        console.error('Error fetching completed appointments:', error);
+      }
+      
+      try {
+        const cancelledAppointments = await api.getAppointments('cancelled');
+        setStats(prevStats => ({
+          ...prevStats,
+          cancelledCount: cancelledAppointments.length,
+        }));
+      } catch (error) {
+        console.error('Error fetching cancelled appointments:', error);
+      }
+      
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      setError('Failed to load dashboard data. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <p className="ml-3 text-gray-600">Authenticating...</p>
+      </div>
+    );
+  }
   
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <p className="ml-3 text-gray-600">Loading dashboard...</p>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded relative mb-6" role="alert">
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{error}</span>
+          <button 
+            className="mt-4 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded"
+            onClick={fetchDashboardData}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded relative mb-6" role="alert">
+          <strong className="font-bold">Not logged in: </strong>
+          <span className="block sm:inline">Please log in to access the doctor dashboard.</span>
+          <Link to="/login" className="mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded inline-block">
+            Go to Login
+          </Link>
+        </div>
       </div>
     );
   }
@@ -86,7 +180,7 @@ const DoctorDashboard = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-800">Doctor Dashboard</h1>
-        <p className="text-gray-600 mt-2">Welcome back, Dr. {user.name}</p>
+        <p className="text-gray-600 mt-2">Welcome back, Dr. {user.name || 'Doctor'}</p>
       </div>
       
       {/* Stats Section */}

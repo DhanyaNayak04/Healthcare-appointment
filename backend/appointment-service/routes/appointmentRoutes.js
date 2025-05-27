@@ -149,17 +149,25 @@ router.get('/', auth, async (req, res) => {
       try {
         const doctorResponse = await axios.get(
           `${DOCTOR_SERVICE_URL}/api/doctors/user/${req.user.id}`,
-          { headers: { 'x-auth-token': req.header('x-auth-token') } }
+          { 
+            headers: { 'x-auth-token': req.header('x-auth-token') },
+            validateStatus: function(status) {
+              // Accept 404 status to handle gracefully
+              return status < 500;
+            }
+          }
         );
         
-        if (doctorResponse.data) {
-          query.doctorId = doctorResponse.data._id;
-        } else {
-          return res.status(404).json({ message: 'Doctor profile not found' });
+        if (doctorResponse.status === 404 || !doctorResponse.data) {
+          // Return empty array if doctor profile doesn't exist yet
+          return res.json([]);
         }
+        
+        query.doctorId = doctorResponse.data._id;
       } catch (error) {
         console.error('Error fetching doctor profile:', error.message);
-        return res.status(500).json({ message: 'Error fetching doctor profile' });
+        // Return empty array instead of error
+        return res.json([]);
       }
     }
 
@@ -176,17 +184,46 @@ router.get('/', auth, async (req, res) => {
 
         try {
           // Get patient details
-          const patientResponse = await axios.get(`${USER_SERVICE_URL}/api/users/${appointment.patientId}`);
-          appointmentObj.patient = patientResponse.data;
+          const patientResponse = await axios.get(
+            `${USER_SERVICE_URL}/api/users/${appointment.patientId}`,
+            { 
+              validateStatus: function(status) {
+                return status < 500;
+              }
+            }
+          );
+          
+          if (patientResponse.status === 200) {
+            appointmentObj.patient = patientResponse.data;
+          }
 
           // Get doctor user details
-          const doctorProfileResponse = await axios.get(`${DOCTOR_SERVICE_URL}/api/doctors/${appointment.doctorId}`);
-          const doctorUserResponse = await axios.get(`${USER_SERVICE_URL}/api/users/${doctorProfileResponse.data.userId}`);
+          const doctorProfileResponse = await axios.get(
+            `${DOCTOR_SERVICE_URL}/api/doctors/${appointment.doctorId}`,
+            { 
+              validateStatus: function(status) {
+                return status < 500;
+              }
+            }
+          );
           
-          appointmentObj.doctor = {
-            ...doctorProfileResponse.data,
-            user: doctorUserResponse.data
-          };
+          if (doctorProfileResponse.status === 200) {
+            const doctorUserResponse = await axios.get(
+              `${USER_SERVICE_URL}/api/users/${doctorProfileResponse.data.userId}`,
+              { 
+                validateStatus: function(status) {
+                  return status < 500;
+                }
+              }
+            );
+            
+            if (doctorUserResponse.status === 200) {
+              appointmentObj.doctor = {
+                ...doctorProfileResponse.data,
+                user: doctorUserResponse.data
+              };
+            }
+          }
 
           return appointmentObj;
         } catch (error) {
@@ -557,17 +594,26 @@ router.get('/upcoming', auth, async (req, res) => {
       // Get doctor details to find doctorId
       try {
         const doctorResponse = await axios.get(
-          `${DOCTOR_SERVICE_URL}/api/doctors/user/${req.user.id}`
+          `${DOCTOR_SERVICE_URL}/api/doctors/user/${req.user.id}`,
+          { 
+            headers: { 'x-auth-token': req.header('x-auth-token') },
+            validateStatus: function(status) {
+              // Accept 404 status to handle gracefully
+              return status < 500;
+            }
+          }
         );
         
-        if (doctorResponse.data) {
-          query.doctorId = doctorResponse.data._id;
-        } else {
-          return res.status(404).json({ message: 'Doctor profile not found' });
+        if (doctorResponse.status === 404 || !doctorResponse.data) {
+          // Return empty array if doctor profile doesn't exist yet
+          return res.json([]);
         }
+        
+        query.doctorId = doctorResponse.data._id;
       } catch (error) {
         console.error('Error fetching doctor profile:', error.message);
-        return res.status(500).json({ message: 'Error fetching doctor profile' });
+        // Return empty array instead of error
+        return res.json([]);
       }
     }
 
@@ -575,24 +621,53 @@ router.get('/upcoming', auth, async (req, res) => {
       .sort({ date: 1, startTime: 1 })
       .limit(10);  // Limit to next 10 appointments
 
-    // Fetch additional details for each appointment
+    // Fetch additional details for each appointment with error handling
     const appointmentsWithDetails = await Promise.all(
       appointments.map(async (appointment) => {
         const appointmentObj = appointment.toObject();
 
         try {
           // Get patient details
-          const patientResponse = await axios.get(`${USER_SERVICE_URL}/api/users/${appointment.patientId}`);
-          appointmentObj.patient = patientResponse.data;
+          const patientResponse = await axios.get(
+            `${USER_SERVICE_URL}/api/users/${appointment.patientId}`,
+            { 
+              validateStatus: function(status) {
+                return status < 500;
+              }
+            }
+          );
+          
+          if (patientResponse.status === 200) {
+            appointmentObj.patient = patientResponse.data;
+          }
 
           // Get doctor user details
-          const doctorProfileResponse = await axios.get(`${DOCTOR_SERVICE_URL}/api/doctors/${appointment.doctorId}`);
-          const doctorUserResponse = await axios.get(`${USER_SERVICE_URL}/api/users/${doctorProfileResponse.data.userId}`);
+          const doctorProfileResponse = await axios.get(
+            `${DOCTOR_SERVICE_URL}/api/doctors/${appointment.doctorId}`,
+            { 
+              validateStatus: function(status) {
+                return status < 500;
+              }
+            }
+          );
           
-          appointmentObj.doctor = {
-            ...doctorProfileResponse.data,
-            user: doctorUserResponse.data
-          };
+          if (doctorProfileResponse.status === 200) {
+            const doctorUserResponse = await axios.get(
+              `${USER_SERVICE_URL}/api/users/${doctorProfileResponse.data.userId}`,
+              { 
+                validateStatus: function(status) {
+                  return status < 500;
+                }
+              }
+            );
+            
+            if (doctorUserResponse.status === 200) {
+              appointmentObj.doctor = {
+                ...doctorProfileResponse.data,
+                user: doctorUserResponse.data
+              };
+            }
+          }
 
           return appointmentObj;
         } catch (error) {

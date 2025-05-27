@@ -25,7 +25,8 @@ const LoginForm = () => {
     setLoading(true);
     
     try {
-      const result = await login(formData);
+      // Update to pass email and password directly instead of formData object
+      const result = await login(formData.email, formData.password);
       
       if (result.success) {
         toast.success('Login successful!');

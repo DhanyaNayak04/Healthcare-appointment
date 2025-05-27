@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { FaUser, FaSignOutAlt, FaBell, FaCalendarAlt, FaSearch, FaClinicMedical, FaHome } from 'react-icons/fa';
+import { FaUser, FaSignOutAlt, FaBell, FaCalendarAlt, FaSearch, FaClinicMedical, FaHome, FaUserMd, FaList, FaChartBar } from 'react-icons/fa';
 import ApiService from '../services/api';
 
 const MainLayout = () => {
@@ -84,12 +84,13 @@ const MainLayout = () => {
         ...commonItems,
         { to: '/doctor/appointments', icon: <FaCalendarAlt />, text: 'Appointments' },
         { to: '/doctor/profile', icon: <FaUser />, text: 'My Profile' }
-      ];
-    } else if (user?.role === 'admin') {
+      ];    } else if (user?.role === 'admin') {
       return [
         ...commonItems,
         { to: '/admin/users', icon: <FaUser />, text: 'Users' },
-        { to: '/admin/doctors', icon: <FaClinicMedical />, text: 'Doctors' }
+        { to: '/admin/doctors', icon: <FaUserMd />, text: 'Doctors' },
+        { to: '/admin/specializations', icon: <FaList />, text: 'Specializations' },
+        { to: '/admin/reports', icon: <FaChartBar />, text: 'Reports' }
       ];
     }
 

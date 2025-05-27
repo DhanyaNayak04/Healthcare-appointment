@@ -124,6 +124,11 @@ router.post(
  *         schema:
  *           type: string
  *         description: Filter doctors by specialization ID
+ *       - in: query
+ *         name: approved
+ *         schema:
+ *           type: boolean
+ *         description: Filter doctors by approval status
  *     responses:
  *       200:
  *         description: List of doctors
@@ -132,11 +137,16 @@ router.post(
  */
 router.get('/', async (req, res) => {
   try {
-    const { specialization } = req.query;
+    const { specialization, approved } = req.query;
     let query = {};
 
     if (specialization) {
       query.specializations = specialization;
+    }
+
+    // Add filter for approval status if specified
+    if (approved !== undefined) {
+      query.isApproved = approved === 'true';
     }
 
     const doctors = await Doctor.find(query)
@@ -222,7 +232,7 @@ router.get('/user/:userId', async (req, res) => {
 
     res.json(doctor);
   } catch (err) {
-    console.error(err.message);
+    console.error('Doctor lookup error:', err.message);
     if (err.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Doctor not found' });
     }
@@ -420,6 +430,76 @@ router.put('/:id/slots', auth, async (req, res) => {
     );
 
     res.json(updatedDoctor);
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+    res.status(500).send('Server error');
+  }
+});
+
+/**
+ * @swagger
+ * /api/doctors/{id}/approve:
+ *   put:
+ *     summary: Approve or reject a doctor
+ *     tags: [Doctors]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Doctor ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - isApproved
+ *             properties:
+ *               isApproved:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Doctor approval status updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not authorized
+ *       404:
+ *         description: Doctor not found
+ *       500:
+ *         description: Server error
+ */
+router.put('/:id/approve', auth, async (req, res) => {
+  try {
+    // Ensure only admins can approve/reject doctors
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can approve doctors' });
+    }
+
+    const doctor = await Doctor.findById(req.params.id);
+
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    const { isApproved } = req.body;
+
+    if (isApproved === undefined) {
+      return res.status(400).json({ message: 'isApproved field is required' });
+    }
+
+    doctor.isApproved = isApproved;
+    await doctor.save();
+
+    res.json(doctor);
   } catch (err) {
     console.error(err.message);
     if (err.kind === 'ObjectId') {

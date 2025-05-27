@@ -13,14 +13,14 @@ RUN npm run build
 # Production environment
 FROM nginx:stable-alpine
 
+# Copy the build output to replace the default nginx contents
 COPY --from=build /app/build /usr/share/nginx/html
 
-# Add custom nginx config if needed
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy a custom nginx config
+COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 3000
+# Expose port
+EXPOSE 80
 
-# Update nginx to run on port 3000 instead of default 80
-RUN sed -i 's/listen       80/listen       3000/g' /etc/nginx/conf.d/default.conf
-
+# Start Nginx server
 CMD ["nginx", "-g", "daemon off;"]

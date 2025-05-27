@@ -11,6 +11,7 @@ const Dashboard = () => {
   const [recentFeedback, setRecentFeedback] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [recommendedDoctors, setRecommendedDoctors] = useState([]);
   
   const api = useMemo(() => new ApiService(token), [token]);
   
@@ -38,13 +39,32 @@ const Dashboard = () => {
         
         // Fetch feedback if user is a patient
         if (user.role === 'patient') {
-          const feedbackData = await api.getPatientFeedback();
-          setRecentFeedback(feedbackData.slice(0, 3)); // Show only 3 recent feedback
+          try {
+            const feedbackData = await api.getPatientFeedback();
+            setRecentFeedback(feedbackData.slice(0, 3)); // Show only 3 recent feedback
+          } catch (feedbackErr) {
+            console.error('Error fetching feedback:', feedbackErr);
+            // Don't fail the whole dashboard if feedback fails
+            setRecentFeedback([]);
+          }
+        }
+        
+        // Fetch recommended doctors if user is a patient
+        if (user.role === 'patient') {
+          try {
+            // Pass true as a second parameter to get only approved doctors
+            const doctorsData = await api.getAllDoctors(null, true);
+            setRecommendedDoctors(doctorsData || []);
+          } catch (doctorsErr) {
+            console.error('Error fetching recommended doctors:', doctorsErr);
+            // Don't fail the whole dashboard if doctors fetch fails
+            setRecommendedDoctors([]);
+          }
         }
         
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
-        setError('Failed to load dashboard data. Please try again later.');
+        setError('Failed to load some dashboard data. Please refresh to try again.');
       } finally {
         setLoading(false);
       }
@@ -258,6 +278,64 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+      
+      {/* Recommended Doctors Section - New Addition */}
+      {user.role === 'patient' && recommendedDoctors.length > 0 && (
+        <div className="mt-8 bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold flex items-center">
+              <FaUserMd className="mr-2 text-blue-500" />
+              Recommended Doctors
+            </h2>
+            <Link 
+              to="/search-doctors" 
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              View all doctors
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {recommendedDoctors.slice(0, 6).map((doctor) => (
+              <div key={doctor._id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                <h3 className="font-semibold text-lg">
+                  {doctor.user && doctor.user.name 
+                    ? `Dr. ${doctor.user.name}` 
+                    : `Dr. ${doctor.name || 'Unknown'}`}
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  {doctor.specializations && doctor.specializations.length > 0 
+                    ? doctor.specializations.map(spec => spec.name).join(', ')
+                    : doctor.specialization || 'General Practice'}
+                </p>
+                {doctor.averageRating > 0 && (
+                  <div className="flex items-center mt-2">
+                    <div className="flex items-center">
+                      {[...Array(5)].map((_, i) => (
+                        <FaStar
+                          key={i}
+                          className={`text-sm ${
+                            i < Math.round(doctor.averageRating) ? 'text-yellow-500' : 'text-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm text-gray-600 ml-2">
+                      ({doctor.totalRatings || 0} reviews)
+                    </span>
+                  </div>
+                )}
+                <Link 
+                  to={`/doctor/${doctor._id}`}
+                  className="mt-3 block text-center bg-blue-100 text-blue-700 hover:bg-blue-200 py-2 rounded-md text-sm"
+                >
+                  View Profile
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

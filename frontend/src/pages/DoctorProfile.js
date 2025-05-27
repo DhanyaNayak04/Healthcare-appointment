@@ -24,23 +24,59 @@ const DoctorProfile = () => {
       const doctorData = await api.getDoctorById(id);
       setDoctor(doctorData);
       
-      // Fetch user details
-      const userResponse = await fetch(`http://localhost:3001/api/users/${doctorData.userId}`);
-      const userData = await userResponse.json();
-      setUserData(userData);
+      // Fetch user details - add error handling
+      try {
+        const userResponse = await fetch(`http://localhost:3001/api/users/${doctorData.userId}`);
+        
+        if (!userResponse.ok) {
+          throw new Error(`Error fetching user data: ${userResponse.status}`);
+        }
+        
+        const userData = await userResponse.json();
+        setUserData(userData);
+      } catch (userError) {
+        console.error('Failed to load user data:', userError);
+        // Set minimal user data to prevent UI errors
+        setUserData({
+          name: 'Unknown Doctor',
+          email: 'Not available',
+          address: 'Not available',
+          phone: 'Not available'
+        });
+        toast.warning('Some doctor information could not be loaded');
+      }
       
-      // Fetch doctor feedback
-      const feedbackData = await api.getDoctorFeedback(id);
-      setFeedback(feedbackData);
-      
-      // Fetch feedback stats
-      const statsData = await fetch(`http://localhost:3004/api/feedback/stats/doctor/${id}`);
-      const statsJson = await statsData.json();
-      setStats(statsJson);
+      // Fetch doctor feedback with error handling
+      try {
+        const feedbackData = await api.getDoctorFeedback(id);
+        setFeedback(feedbackData);
+        
+        // Fetch feedback stats
+        const statsResponse = await fetch(`http://localhost:3004/api/feedback/stats/doctor/${id}`);
+        if (!statsResponse.ok) {
+          throw new Error(`Error fetching stats: ${statsResponse.status}`);
+        }
+        const statsJson = await statsResponse.json();
+        setStats(statsJson);
+      } catch (feedbackError) {
+        console.error('Failed to load feedback data:', feedbackError);
+        // Set empty data to prevent UI errors
+        setFeedback([]);
+        setStats({
+          averageRating: 0,
+          totalFeedback: 0
+        });
+      }
       
     } catch (error) {
       toast.error('Failed to load doctor profile. Please try again.');
       console.error(error);
+      // Navigate to search page if doctor not found
+      if (error.response && error.response.status === 404) {
+        toast.error('Doctor profile not found');
+        // Uncomment the line below to redirect in case of 404
+        // navigate('/search-doctors');
+      }
     } finally {
       setLoading(false);
     }

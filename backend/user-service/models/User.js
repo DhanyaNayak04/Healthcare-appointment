@@ -1,6 +1,13 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+// List of approved admin emails
+const APPROVED_ADMIN_EMAILS = [
+  'dhanya.is22@bmsce.ac.in',
+  'siri.is22@bmsce.ac.in',
+  'bhumika.is22@bmsce.ac.in'
+];
+
 /**
  * @swagger
  * components:
@@ -96,6 +103,11 @@ userSchema.pre('save', async function (next) {
 // Method to compare password
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Static method to check if email is approved for admin role
+userSchema.statics.isApprovedAdminEmail = function(email) {
+  return APPROVED_ADMIN_EMAILS.includes(email.toLowerCase());
 };
 
 const User = mongoose.model('User', userSchema);

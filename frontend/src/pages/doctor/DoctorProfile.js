@@ -45,51 +45,62 @@ const DoctorProfile = () => {
       try {
         setLoading(true);
         
+        // Debug current user
+        console.log('Current user in DoctorProfile:', user);
+        
         // Fetch all specializations
         const specializationsData = await api.getAllSpecializations();
-        setSpecializations(specializationsData);
+        setSpecializations(specializationsData || []);
         
-        // Fetch user profile
-        if (user) {
+        // Fetch user profile - add checks for user existence
+        if (user && user.id) {
+          console.log('Fetching data for user ID:', user.id);
+          
           setUserFormData({
             name: user.name || '',
             phone: user.phone || '',
             address: user.address || '',
             dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
           });
-        }
-        
-        // Fetch doctor profile
-        try {
-          const doctorData = await api.getDoctorByUserId(user.id);
-          setDoctorProfile(doctorData);
           
-          setDoctorFormData({
-            specializations: doctorData.specializations.map(spec => spec._id),
-            qualifications: doctorData.qualifications && doctorData.qualifications.length > 0 
-              ? doctorData.qualifications 
-              : [{ degree: '', institution: '', year: '' }],
-            experience: doctorData.experience || 0,
-            bio: doctorData.bio || '',
-            consultationFee: doctorData.consultationFee || 0,
-            availableSlots: doctorData.availableSlots && doctorData.availableSlots.length > 0
-              ? doctorData.availableSlots
-              : [
-                  { day: 'Monday', startTime: '09:00', endTime: '17:00', isAvailable: true },
-                  { day: 'Tuesday', startTime: '09:00', endTime: '17:00', isAvailable: true },
-                  { day: 'Wednesday', startTime: '09:00', endTime: '17:00', isAvailable: true },
-                  { day: 'Thursday', startTime: '09:00', endTime: '17:00', isAvailable: true },
-                  { day: 'Friday', startTime: '09:00', endTime: '17:00', isAvailable: true },
-                  { day: 'Saturday', startTime: '09:00', endTime: '13:00', isAvailable: false },
-                  { day: 'Sunday', startTime: '09:00', endTime: '13:00', isAvailable: false },
-                ],
-          });
-        } catch (error) {
-          if (error.response && error.response.status !== 404) {
-            toast.error('Failed to load doctor profile');
-            console.error(error);
+          // Fetch doctor profile
+          try {
+            const doctorData = await api.getDoctorByUserId(user.id);
+            console.log('Doctor profile data:', doctorData);
+            
+            if (doctorData) {
+              setDoctorProfile(doctorData);
+              
+              setDoctorFormData({
+                specializations: doctorData.specializations ? doctorData.specializations.map(spec => spec._id) : [],
+                qualifications: doctorData.qualifications && doctorData.qualifications.length > 0 
+                  ? doctorData.qualifications 
+                  : [{ degree: '', institution: '', year: '' }],
+                experience: doctorData.experience || 0,
+                bio: doctorData.bio || '',
+                consultationFee: doctorData.consultationFee || 0,
+                availableSlots: doctorData.availableSlots && doctorData.availableSlots.length > 0
+                  ? doctorData.availableSlots
+                  : [
+                      { day: 'Monday', startTime: '09:00', endTime: '17:00', isAvailable: true },
+                      { day: 'Tuesday', startTime: '09:00', endTime: '17:00', isAvailable: true },
+                      { day: 'Wednesday', startTime: '09:00', endTime: '17:00', isAvailable: true },
+                      { day: 'Thursday', startTime: '09:00', endTime: '17:00', isAvailable: true },
+                      { day: 'Friday', startTime: '09:00', endTime: '17:00', isAvailable: true },
+                      { day: 'Saturday', startTime: '09:00', endTime: '13:00', isAvailable: false },
+                      { day: 'Sunday', startTime: '09:00', endTime: '13:00', isAvailable: false },
+                    ],
+              });
+            }
+          } catch (error) {
+            console.error('Error fetching doctor profile:', error);
+            toast.error('Failed to load doctor profile data');
           }
-          // 404 is expected if doctor profile doesn't exist yet
+        } else {
+          // Handle case when user is not defined or doesn't have an ID
+          console.error('User information is missing', { user });
+          toast.error('User information is missing. Please log in again.');
+          navigate('/login'); // Redirect to login page
         }
       } catch (error) {
         toast.error('Failed to load data');
@@ -100,7 +111,7 @@ const DoctorProfile = () => {
     };
     
     fetchData();
-  }, [user, api]);
+  }, [user, api, navigate]);
   
   const handleUserChange = (e) => {
     const { name, value } = e.target;
@@ -113,8 +124,16 @@ const DoctorProfile = () => {
   };
   
   const handleSpecializationChange = (e) => {
-    const options = Array.from(e.target.selectedOptions, option => option.value);
-    setDoctorFormData(prev => ({ ...prev, specializations: options }));
+    // Fix for multiple select option handling
+    const selectedOptions = Array.from(
+      e.target.selectedOptions,
+      option => option.value
+    );
+    
+    setDoctorFormData(prev => ({ 
+      ...prev, 
+      specializations: selectedOptions 
+    }));
   };
   
   const handleQualificationChange = (index, field, value) => {
@@ -152,6 +171,16 @@ const DoctorProfile = () => {
     setSubmitting(true);
     
     try {
+      // Add validation to ensure user exists
+      if (!user || !user.id) {
+        toast.error('User information is missing. Please log in again.');
+        setSubmitting(false);
+        navigate('/login');
+        return;
+      }
+      
+      console.log('Submitting profile update for user:', user.id);
+      
       // Update user profile
       const userResult = await updateProfile(user.id, userFormData);
       
@@ -161,35 +190,89 @@ const DoctorProfile = () => {
         return;
       }
       
-      // Create or update doctor profile
-      if (doctorProfile) {
-        // Update existing profile
-        await api.updateDoctorProfile(doctorProfile._id, {
-          specializations: doctorFormData.specializations,
-          qualifications: doctorFormData.qualifications,
-          experience: parseInt(doctorFormData.experience),
-          bio: doctorFormData.bio,
-          consultationFee: parseFloat(doctorFormData.consultationFee),
-          availableSlots: doctorFormData.availableSlots,
-        });
-      } else {
-        // Create new profile
-        await api.createDoctorProfile({
-          userId: user.id,
-          specializations: doctorFormData.specializations,
-          qualifications: doctorFormData.qualifications,
-          experience: parseInt(doctorFormData.experience),
-          bio: doctorFormData.bio,
-          consultationFee: parseFloat(doctorFormData.consultationFee),
-          availableSlots: doctorFormData.availableSlots,
-        });
+      // Validate specializations before submission
+      if (!doctorFormData.specializations || doctorFormData.specializations.length === 0) {
+        toast.error('Please select at least one specialization');
+        setSubmitting(false);
+        return;
       }
       
-      toast.success('Profile updated successfully');
-      navigate('/doctor/dashboard');
+      // Validate qualifications
+      const validQualifications = doctorFormData.qualifications.filter(
+        q => q.degree && q.institution && q.year
+      );
+      
+      if (validQualifications.length === 0) {
+        toast.error('Please add at least one qualification with all fields filled');
+        setSubmitting(false);
+        return;
+      }
+      
+      // Create standardized profile data
+      const profileData = {
+        userId: user.id,
+        specializations: doctorFormData.specializations,
+        qualifications: validQualifications,
+        experience: parseInt(doctorFormData.experience) || 0,
+        bio: doctorFormData.bio || '',
+        consultationFee: parseFloat(doctorFormData.consultationFee) || 0,
+        availableSlots: doctorFormData.availableSlots.map(slot => ({
+          day: slot.day,
+          startTime: slot.startTime || '09:00',
+          endTime: slot.endTime || '17:00',
+          isAvailable: Boolean(slot.isAvailable)
+        })),
+      };
+      
+      try {
+        // Check if doctor profile exists before creating/updating
+        if (doctorProfile && doctorProfile._id) {
+          console.log('Updating existing doctor profile:', doctorProfile._id);
+          // Update existing profile
+          await api.updateDoctorProfile(doctorProfile._id, profileData);
+          toast.success('Doctor profile updated successfully');
+        } else {
+          console.log('Creating new doctor profile for user:', user.id);
+          // Try to create new profile, with better error handling
+          await api.createDoctorProfile(profileData);
+          toast.success('Doctor profile created successfully');
+        }
+        
+        // Refresh doctor profile data to ensure we have the latest
+        const updatedDoctorData = await api.getDoctorByUserId(user.id);
+        setDoctorProfile(updatedDoctorData);
+        
+        // Redirect after successful creation/update
+        navigate('/doctor/dashboard');
+      } catch (error) {
+        console.error('Doctor profile operation error:', error);
+        
+        // Handle specific error for existing profile
+        if (error.message && error.message.includes("Doctor profile already exists")) {
+          toast.warning('A profile for this doctor already exists. Refreshing data...');
+          
+          // Try to fetch the existing profile
+          try {
+            const existingProfile = await api.getDoctorByUserId(user.id);
+            if (existingProfile && existingProfile._id) {
+              setDoctorProfile(existingProfile);
+              // Now try to update instead of create
+              await api.updateDoctorProfile(existingProfile._id, profileData);
+              toast.success('Doctor profile updated successfully');
+              navigate('/doctor/dashboard');
+            }
+          } catch (fetchError) {
+            console.error('Error fetching existing profile:', fetchError);
+            toast.error('Could not retrieve existing doctor profile. Please try again later.');
+          }
+        } else {
+          throw error; // Rethrow to be caught by the outer catch
+        }
+      }
     } catch (error) {
-      toast.error('Failed to update doctor profile');
-      console.error(error);
+      const errorMessage = error.message || 'An unknown error occurred';
+      toast.error('Failed to update doctor profile: ' + errorMessage);
+      console.error('Profile update error:', error);
     } finally {
       setSubmitting(false);
     }

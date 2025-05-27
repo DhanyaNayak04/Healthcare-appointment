@@ -7,7 +7,7 @@ services:
     volumes:
       - user-db-data:/data/db
     ports:
-      - "27017:27017"
+      - "27022:27017"
     networks:
       - healthcare-network
 
@@ -139,7 +139,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
       - user-service
       - doctor-service
@@ -147,12 +147,12 @@ services:
       - feedback-service
       - notification-service
     environment:
-      - REACT_APP_API_BASE_URL=${REACT_APP_API_BASE_URL}
-      - REACT_APP_USER_SERVICE_PORT=${REACT_APP_USER_SERVICE_PORT}
-      - REACT_APP_DOCTOR_SERVICE_PORT=${REACT_APP_DOCTOR_SERVICE_PORT}
-      - REACT_APP_APPOINTMENT_SERVICE_PORT=${REACT_APP_APPOINTMENT_SERVICE_PORT}
-      - REACT_APP_FEEDBACK_SERVICE_PORT=${REACT_APP_FEEDBACK_SERVICE_PORT}
-      - REACT_APP_NOTIFICATION_SERVICE_PORT=${REACT_APP_NOTIFICATION_SERVICE_PORT}
+      - REACT_APP_API_BASE_URL=${REACT_APP_API_BASE_URL:-http://localhost}
+      - REACT_APP_USER_SERVICE_PORT=${REACT_APP_USER_SERVICE_PORT:-3001}
+      - REACT_APP_DOCTOR_SERVICE_PORT=${REACT_APP_DOCTOR_SERVICE_PORT:-3002}
+      - REACT_APP_APPOINTMENT_SERVICE_PORT=${REACT_APP_APPOINTMENT_SERVICE_PORT:-3003}
+      - REACT_APP_FEEDBACK_SERVICE_PORT=${REACT_APP_FEEDBACK_SERVICE_PORT:-3004}
+      - REACT_APP_NOTIFICATION_SERVICE_PORT=${REACT_APP_NOTIFICATION_SERVICE_PORT:-3005}
     env_file:
       - .env
     networks:
