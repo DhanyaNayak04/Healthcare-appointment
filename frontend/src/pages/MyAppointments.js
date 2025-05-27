@@ -46,17 +46,20 @@ const MyAppointments = () => {
   };
   
   const filterAppointments = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     if (activeTab === 'upcoming') {
       return appointments.filter(
         (appointment) => 
-          appointment.status === 'scheduled' && 
-          new Date(appointment.date) >= new Date()
+          (appointment.status === 'scheduled') && 
+          (new Date(appointment.date) >= today)
       );
     } else if (activeTab === 'past') {
       return appointments.filter(
         (appointment) => 
-          appointment.status === 'completed' || 
-          new Date(appointment.date) < new Date()
+          (appointment.status === 'completed') || 
+          (appointment.status === 'scheduled' && new Date(appointment.date) < today)
       );
     } else if (activeTab === 'cancelled') {
       return appointments.filter(

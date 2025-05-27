@@ -420,12 +420,27 @@ export default class ApiService {
   async getAppointments(status = null) {
     try {
       const params = status ? { status } : {};
-      // Add error handling for missing doctor profile
+      console.log(`Fetching appointments with params:`, params);
+      
       const response = await this.axios.get(`${appointmentServiceUrl}/api/appointments`, { 
         params,
         // Add a longer timeout for this potentially complex operation
         timeout: 10000
       });
+      
+      // Log the first few appointments for debugging
+      if (response.data && response.data.length > 0) {
+        console.log(`Received ${response.data.length} appointments`);
+        console.log(`Sample appointment dates:`, 
+          response.data.slice(0, 3).map(a => ({
+            id: a._id,
+            date: a.date,
+            status: a.status,
+            isDateInFuture: new Date(a.date) >= new Date()
+          }))
+        );
+      }
+      
       return response.data;
     } catch (error) {
       console.error(`Error getting appointments (status: ${status}):`, error.message);
@@ -436,6 +451,7 @@ export default class ApiService {
   
   async getAppointmentById(appointmentId) {
     try {
+      console.log(`Fetching appointment with ID: ${appointmentId}`);
       const response = await this.axios.get(`${appointmentServiceUrl}/api/appointments/${appointmentId}`);
       return response.data;
     } catch (error) {
